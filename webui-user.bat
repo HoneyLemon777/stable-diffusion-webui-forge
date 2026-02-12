@@ -1,9 +1,9 @@
 @echo off
 
-set PYTHON=
+set PYTHON=C:\Windows\py.exe -3.10
 set GIT=
 set VENV_DIR=
-set COMMANDLINE_ARGS=
+set COMMANDLINE_ARGS=--api --xformers
 
 @REM Uncomment following code to reference an existing A1111 checkout.
 @REM set A1111_HOME=Your A1111 checkout dir
