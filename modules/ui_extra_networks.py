@@ -97,7 +97,15 @@ def register_page(page):
 def fetch_file(filename: str = ""):
     from starlette.responses import FileResponse
 
+    print(f"[DEBUG fetch_file] filename='{filename}'") # DEBUG
     if not os.path.isfile(filename):
+        print(f"[DEBUG fetch_file] custom 404: os.path.isfile('{filename}') is False") # DEBUG
+        # Try to see if it exists with other separators
+        if os.path.isfile(filename.replace('/', '\\')):
+             print(f"[DEBUG fetch_file] exists with backslash!")
+        if os.path.isfile(filename.replace('\\', '/')):
+             print(f"[DEBUG fetch_file] exists with forward slash!")
+        
         raise HTTPException(status_code=404, detail="File not found")
 
     if not any(Path(x).absolute() in Path(filename).absolute().parents for x in allowed_dirs):
@@ -171,6 +179,7 @@ def get_single_card(page: str = "", tabname: str = "", name: str = ""):
 
 
 def add_pages_to_demo(app):
+    print(f"!!! REGISTERING ROUTES in add_pages_to_demo !!! app={app}") # DEBUG
     app.add_api_route("/sd_extra_networks/thumb", fetch_file, methods=["GET"])
     app.add_api_route("/sd_extra_networks/cover-images", fetch_cover_images, methods=["GET"])
     app.add_api_route("/sd_extra_networks/metadata", get_metadata, methods=["GET"])
@@ -659,17 +668,48 @@ class ExtraNetworksPage:
             "path": str(pth).lower(),
         }
 
+    _find_preview_debug_count = 0  # DEBUG: temporary counter
+
     def find_preview(self, path):
         """
         Find a preview PNG for a given path (without extension) and call link_preview on it.
         """
+        import os as _os  # DEBUG
 
         potential_files = sum([[f"{path}.{ext}", f"{path}.preview.{ext}"] for ext in allowed_preview_extensions()], [])
 
-        for file in potential_files:
-            if self.lister.exists(file):
-                return self.link_preview(file)
+        # DEBUG: log first 5 calls + all failures
+        ExtraNetworksPage._find_preview_debug_count += 1
+        _debug = ExtraNetworksPage._find_preview_debug_count <= 5
 
+        if _debug:
+            print(f"[DEBUG find_preview #{ExtraNetworksPage._find_preview_debug_count}] path={path}")
+            print(f"  allowed_exts={allowed_preview_extensions()}")
+
+        for file in potential_files:
+            exists_lister = self.lister.exists(file)
+            exists_os = _os.path.isfile(file)
+            if _debug:
+                print(f"  check: {_os.path.basename(file)} lister={exists_lister} os={exists_os}")
+            if exists_lister:
+                result = self.link_preview(file)
+                if _debug:
+                    print(f"  -> FOUND: {result}")
+                return result
+
+        # Always log when preview NOT found
+        print(f"[DEBUG find_preview] NOT FOUND for: {_os.path.basename(path)}")
+        # Check if .preview.png exists via os directly
+        preview_file = f"{path}.preview.png"
+        if _os.path.isfile(preview_file):
+            print(f"  WARNING: File exists on disk but lister says NO!")
+            dirname, fname = _os.path.split(preview_file)
+            cached_dir = self.lister.cached_dirs.get(dirname)
+            if cached_dir:
+                print(f"  cached_dir exists, files_cased keys sample: {list(cached_dir.files_cased.keys())[:5]}")
+                print(f"  '{fname}' in files_cased: {fname in cached_dir.files_cased}")
+            else:
+                print(f"  cached_dir is None for dirname={dirname}")
         return None
 
     def find_embedded_preview(self, path, name, metadata):
